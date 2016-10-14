@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+# Original script source: https://github.com/sportngin/rds-pgbadger
+
 require 'optparse'
 require 'yaml'
 require 'ox'
@@ -28,10 +30,20 @@ rds = Aws::RDS::Client.new(
 )
 log_files = rds.describe_db_log_files(db_instance_identifier: options[:instance_id], filename_contains: "postgresql.log.#{options[:date]}")[:describe_db_log_files].map(&:log_file_name)
 
-dir_name = "#{options[:instance_id]}-#{Time.now.to_i}"
+dir_name = "#{options[:instance_id]}"
 
-Dir.mkdir("out/#{dir_name}")
-Dir.mkdir("out/#{dir_name}/error")
+if !File.directory?("out")
+  Dir.mkdir("out")
+end
+
+if !File.directory?("out/#{dir_name}")
+  Dir.mkdir("out/#{dir_name}")
+end
+
+if !File.directory?("out/#{dir_name}/error")
+  Dir.mkdir("out/#{dir_name}/error")
+end
+
 log_files.each do |log_file|
   puts "Downloading log file: #{log_file}"
   open("out/#{dir_name}/#{log_file}", 'w') do |f|
@@ -43,8 +55,9 @@ log_files.each do |log_file|
   end
   puts "Saved log to out/#{dir_name}/#{log_file}."
 end
-puts "Generating PG Badger report."
-`pgbadger --prefix "%t:%r:%u@%d:[%p]:" --outfile out/#{dir_name}/#{dir_name}.html out/#{dir_name}/error/*.log.*`
-puts "Opening report out/#{dir_name}/#{dir_name}.html."
-`open out/#{dir_name}/#{dir_name}.html`
 
+# Remove report file as the cronjob does not seems to be able to overwrite it
+File.delete("out/#{dir_name}/#{dir_name}.html") if File.exist?("out/#{dir_name}/#{dir_name}.html")
+
+puts "Generating PG Badger report."
+`/usr/local/bin/pgbadger --prefix "%t:%r:%u@%d:[%p]:" --outfile out/#{dir_name}/index.html out/#{dir_name}/error/*.log.*`
